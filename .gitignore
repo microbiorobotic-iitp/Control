@@ -1,0 +1,4 @@
+video_exp/videos/
+__pycache__/
+analysis/logs/
+experiments/
