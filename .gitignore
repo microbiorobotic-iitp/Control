@@ -2,3 +2,4 @@ video_exp/videos/
 __pycache__/
 analysis/logs/
 experiments/
+magnetic_force_analysis/

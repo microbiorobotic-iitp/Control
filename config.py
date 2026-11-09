@@ -98,6 +98,7 @@ HEADING_CORR_GAIN = 1.0
 # ---------------- manual coil control ----------------
 KEY_HOLD_TIMEOUT = 0.75   # sec; repeats of a toggle key within this gap count as "held"
 DEFAULT_PWM = 0.0  # value with which the PWM will start 
+# MANUAL_RAMP_STEP = 0.002
 MANUAL_RAMP_STEP = 0.002
 
 

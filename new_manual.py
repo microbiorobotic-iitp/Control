@@ -15,13 +15,17 @@ CAM_WIN = 'Camera'
 # (key used in meta.json, question shown in the terminal, default answer)
 META_QUESTIONS = [
     ('liquid',          'What is the liquid?',            ''),
-    ('liquid_depth_mm', 'Depth of the liquid (mm)?',      ''),
     ('float',           'Is Microrobot floating on surface? (True/False)', ''),
+    ('voltage',           'Voltage in Numerical', ''),
+    ('magnification',           'Magnification', ''),
+    ('nu_turns',           'Number of turns of Coils', ''),
+    ('notes',           'Any notes', ''),
+    # ('liquid_depth_mm', 'Depth of the liquid (mm)?',      ''),
 ]
 
 MIN_STEP = getattr(C, 'MIN_RAMP_STEP', 0.0005)              # smallest duty change (least count)
 RAMP_LADDER = [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05]   # [ and ] move along this list
-TRACK_DURING_RUN = False     # True -> also log robot x,y per frame (costs a little CPU in the loop)
+TRACK_DURING_RUN = True     # True -> also log robot x,y per frame (costs a little CPU in the loop)
 RECORD_FPS = getattr(C, 'RECORD_FPS', 30)                   # nominal fps stored in the video header
 RECORD_CODEC = getattr(C, 'RECORD_CODEC', 'MJPG')           # MJPG/.avi = light on CPU, frame-accurate
 EXPERIMENT_DIR = getattr(C, 'EXPERIMENT_DIR', 'experiments')
@@ -155,18 +159,49 @@ def stop_all_coils(ard):
             pass
 
 
-def draw_preview(frame, state, rec, track_res):
-    view = frame.copy()
+SHORT = {'yplus': '+Y', 'xminus': '-X', 'yminus': '-Y', 'xplus': '+X'}
+DIR_VAL = {name: d for _, name, _, d, _ in COILS}
+
+
+def _put(img, text, org, color=(0, 255, 255), scale=0.55):
+    cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale, color, 2, cv2.LINE_AA)
+
+
+def burn_in(frame, state, track_res):
+    """Returns a copy of the frame with duty cycles, directions and robot center drawn in.
+    This copy is what goes into the recorded video."""
+    out = frame.copy()
+    sent = state['sent']          # duty that was ACTIVE when this frame was captured
+
+    # robot center
     if track_res is not None:
-        c = track_res['center']
-        cv2.circle(view, (int(c[0]), int(c[1])), int(track_res['R']), (0, 255, 0), 2)
+        cx, cy = track_res['center']
+        # cv2.circle(out, (int(cx), int(cy)), int(track_res['R']), (0, 255, 0), 2)
+        # cv2.drawMarker(out, (int(cx), int(cy)), (0, 0, 255), cv2.MARKER_CROSS, 14, 2)
+        center_txt = f"center: ({cx:.1f}, {cy:.1f}) px"
+    else:
+        center_txt = "center: lost"
+
+    # duty per coil, with its direction-pin value
+    y = 55
+    _put(out, center_txt, (10, y), (0, 255, 0))
+    for _, name, *_ in COILS:
+        y += 22
+        _put(out, f"{SHORT[name]}: duty {sent.get(name, 0.0):.4f}  dir={DIR_VAL[name]}", (10, y))
+
+    # signed net drive per axis
+    net_x = sent.get('xplus', 0.0) - sent.get('xminus', 0.0)
+    net_y = sent.get('yplus', 0.0) - sent.get('yminus', 0.0)
+    _put(out, f"net X: {net_x:+.4f}   net Y: {net_y:+.4f}", (10, y + 24), (255, 255, 0))
+    return out
+
+
+def draw_preview(burned, rec):
+    """Live-window extras that should NOT appear in the saved video (REC indicator)."""
+    view = burned.copy()
     if rec is not None:
-        cv2.circle(view, (20, 20), 8, (0, 0, 255), -1)
+        # cv2.circle(view, (20, 20), 8, (0, 0, 255), -1)
         cv2.putText(view, f'REC {rec.elapsed():.1f}s', (36, 27), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-    sent = state['sent']
-    cv2.putText(view, f"X: +{sent.get('xplus', 0):.4f} -{sent.get('xminus', 0):.4f}   "
-                      f"Y: +{sent.get('yplus', 0):.4f} -{sent.get('yminus', 0):.4f}",
-                (10, view.shape[0] - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
     return view
 
 
@@ -237,11 +272,13 @@ def main():
                                      track_kind=track_res['kind'])
 
             # duty in state['sent'] is what was ACTIVE while this frame was captured
+            burned = burn_in(frame, state, track_res)     # tracking above ran on the clean frame
+
             if rec is not None:
-                rec.log(frame, t=t_frame, **duty_columns(state['sent']),
+                rec.log(burned, t=t_frame, **duty_columns(state['sent']),
                         selected_coil=COIL_NAME[state['selected']], ramp_step=ramp_step(state), **track_row)
 
-            cv2.imshow(CAM_WIN, draw_preview(frame, state, rec, track_res))
+            cv2.imshow(CAM_WIN, draw_preview(burned, rec))
             cv2.imshow(DASH, render_dashboard(state, rec))
 
             key = decode_key(cv2.waitKeyEx(1))
