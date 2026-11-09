@@ -1,0 +1,16 @@
+{
+  "_note": "um_per_px for every zoom setting. ONLY 2x IS MEASURED (4.66 um/px). The others are scaled as 9.32/mag. Replace with measured values and set verified=true. Valid only for the capture resolution you calibrated at (fill capture_resolution to get a warning if it differs).",
+  "capture_resolution": null,
+  "default": "2",
+  "magnifications": {
+    "0.65": {"um_per_px": 14.338, "verified": false},
+    "1":    {"um_per_px": 9.32,   "verified": false},
+    "1.5":  {"um_per_px": 6.213,  "verified": false},
+    "2":    {"um_per_px": 4.66,   "verified": true},
+    "2.5":  {"um_per_px": 3.728,  "verified": false},
+    "3":    {"um_per_px": 3.107,  "verified": false},
+    "3.5":  {"um_per_px": 2.663,  "verified": false},
+    "4":    {"um_per_px": 2.33,   "verified": false},
+    "4.5":  {"um_per_px": 2.071,  "verified": false}
+  }
+}

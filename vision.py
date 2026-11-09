@@ -4,10 +4,8 @@ import time
 
 import config as C
 
-
 def to_gray(frame):
     return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
 
 def _is_dark(gray, x, y, r):
     inner = np.zeros_like(gray)
@@ -16,7 +14,6 @@ def _is_dark(gray, x, y, r):
     cv2.circle(outer, (int(x), int(y)), int(r * 1.5), 255, -1)
     outer = cv2.subtract(outer, inner)
     return gray[inner > 0].mean() < gray[outer > 0].mean()
-
 
 def find_bots(gray):
     """Equivalent of imfindcircles(..., 'ObjectPolarity','Dark'). Returns (centres Nx2, radii N), strongest first."""

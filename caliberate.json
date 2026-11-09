@@ -1,0 +1,16 @@
+{
+    "1": [
+        {
+            "actual_diameter_mm": 1.5,
+            "calibration_um_per_px": 6.156,
+            "calibration_err_um_per_px": 0.0046
+        }
+    ],
+    "3.5": [
+        {
+            "actual_diameter_mm": 0.15,
+            "calibration_um_per_px": 1.6852,
+            "calibration_err_um_per_px": 0.0014
+        }
+    ]
+}
