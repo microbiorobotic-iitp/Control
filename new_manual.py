@@ -272,13 +272,13 @@ def main():
                                      track_kind=track_res['kind'])
 
             # duty in state['sent'] is what was ACTIVE while this frame was captured
-            burned = burn_in(frame, state, track_res)     # tracking above ran on the clean frame
+            # burned = burn_in(frame, state, track_res)     # tracking above ran on the clean frame
 
             if rec is not None:
-                rec.log(burned, t=t_frame, **duty_columns(state['sent']),
+                rec.log(frame, t=t_frame, **duty_columns(state['sent']),
                         selected_coil=COIL_NAME[state['selected']], ramp_step=ramp_step(state), **track_row)
 
-            cv2.imshow(CAM_WIN, draw_preview(burned, rec))
+            cv2.imshow(CAM_WIN, draw_preview(frame, rec))
             cv2.imshow(DASH, render_dashboard(state, rec))
 
             key = decode_key(cv2.waitKeyEx(1))

@@ -61,6 +61,7 @@ class Camera:
     """one thread keep reading the frames in the background, whenever take snapshot is called another thred blocks it and reads the saved frame, hence returning the closest frame possible at the time of calling."""
 
     def __init__(self, index=C.CAMERA_INDEX, size=C.FRAME_SIZE):
+        self._t = 0.0
 
         # cv2.CAP_DSHOW -> faster startup (Direct show)
         self.cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
@@ -89,9 +90,47 @@ class Camera:
             ok, frame = self.cap.read()  # this have to wait for the camera hardware to provide the snapshot
             if ok:
                 with self._cond:  # as now this thread is dealing with the variables it blocks those variables
+                    self._t = time.perf_counter()
                     self._frame = frame
                     self._count += 1
                     self._cond.notify_all()  # notifies all the waiting threads (if there is any) that the frame has now been updated
+
+    def snapshot_t(self, timeout=5):
+        """Like snapshot() but also returns the time the frame arrived (perf_counter)."""
+        with self._cond:
+            if not self._cond.wait_for(lambda: self._count > self._seen, timeout):
+                raise RuntimeError('Camera timed out')
+            self._seen = self._count
+            return self._frame.copy(), self._t
+
+    def mean_brightness(self, n=3):
+        return float(np.mean([cv2.cvtColor(self.snapshot(), cv2.COLOR_BGR2GRAY).mean() for _ in range(n)]))
+
+    def lock_exposure(self, exposure=None):
+        """Auto-exposure OFF (DirectShow), then verify that brightness really follows exposure."""
+        cur = self.cap.get(cv2.CAP_PROP_EXPOSURE) if exposure is None else exposure
+        self.cap.set(cv2.CAP_PROP_AUTO_WB, 0)
+        self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+        for code in (0.25, 1.0):                       # DirectShow: 0.25 = manual
+            self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, code)
+            self.cap.set(cv2.CAP_PROP_EXPOSURE, cur)
+            time.sleep(0.4)
+            if abs(self.cap.get(cv2.CAP_PROP_EXPOSURE) - cur) < 0.51:
+                break
+        else:
+            return False, 'driver ignored the manual-exposure request'
+        b0 = self.mean_brightness()
+        self.cap.set(cv2.CAP_PROP_EXPOSURE, cur - 1)
+        time.sleep(0.5)
+        b1 = self.mean_brightness()
+        self.cap.set(cv2.CAP_PROP_EXPOSURE, cur)
+        time.sleep(0.4)
+        if abs(b1 - b0) <= 0.03 * max(b0, 1.0):
+            return False, 'image does not respond to exposure: auto-exposure probably still active (try D)'
+        return True, f'manual exposure locked at {cur}'
+
+    def open_driver_dialog(self):
+        self.cap.set(cv2.CAP_PROP_SETTINGS, 1)
 
     # this function returns the image which needs to be analyzed
     def snapshot(self, timeout=5):

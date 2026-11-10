@@ -1,3 +1,7 @@
+EXPERIMENT_DIR = 'experiments'
+RECORD_CODEC = 'MJPG'
+
+
 # ---------------- vision ----------------
 RMIN = 10
 RMAX = 60
@@ -10,10 +14,10 @@ WARMUP_FRAMES = 35
 # ---------------- hardware ----------------
 ARDUINO_PORT = 'COM6'
 PINS = dict(
-    xminus_dir='D7', xminus='D11',
-    yminus_dir='D12', yminus='D10',
-    yplus_dir='D13', yplus='D9',
-    xplus_dir='D2', xplus='D3',
+    yminus_dir='D7', yminus='D11',
+    xminus_dir='D12', xminus='D10',
+    yplus_dir='D6', yplus='D9',
+    xplus_dir='D13', xplus='D3',
 )
 
 # ---------------- tracking ----------------
@@ -23,33 +27,33 @@ TRACK_MAX_SPEED    = None   # px/SECOND the robot can physically move (None = 20
 LOST_TIMEOUT       = 0.3    # seconds without robot before motors are cut
 
 # ---------------- navigation ----------------
-K_FALLBACK = 900
-K_FIXED = 30000
-ROA = 10
-LOOKAHEAD = 40           # px, how far ahead on the line the bot steers toward
-CRUISE_SPEED = 35        # px/sec, velocity setpoint
-DECEL_RADIUS = 10        # px, start slowing within this distance of the final goal
-MIN_SPEED = 5            # px/sec floor while decelerating
+# K_FALLBACK = 900
+# K_FIXED = 30000
+# ROA = 10
+# LOOKAHEAD = 40           # px, how far ahead on the line the bot steers toward
+# CRUISE_SPEED = 35        # px/sec, velocity setpoint
+# DECEL_RADIUS = 10        # px, start slowing within this distance of the final goal
+# MIN_SPEED = 5            # px/sec floor while decelerating
 
-USE_FEEDFORWARD = True
-FF_GAIN_SCALE = 1.0
-FF_MAX_MAG = 0.9          # must be <= MAX_PWM
-TRIM_MAX = 1.0            # max PWM the PID may add or subtract around the calibrated base
-MAX_EXCESS_PWM = 1.0      # cap on the v/k term in the calibrated drive
-PWM_SLEW = 0.3            # max PWM increase per second (calibration ramp was much slower)
+# USE_FEEDFORWARD = True
+# FF_GAIN_SCALE = 1.0
+# FF_MAX_MAG = 0.9          # must be <= MAX_PWM
+# TRIM_MAX = 1.0            # max PWM the PID may add or subtract around the calibrated base
+# MAX_EXCESS_PWM = 1.0      # cap on the v/k term in the calibrated drive
+# PWM_SLEW = 0.3            # max PWM increase per second (calibration ramp was much slower)
 
-KP_V = 2e-3
-KI_V = 3e-3
-KD_V = 0
-MAX_INTEGRAL_V = 100
-SIMPLE_TEST_PWM = None   # back to closed loop
+# KP_V = 2e-3
+# KI_V = 3e-3
+# KD_V = 0
+# MAX_INTEGRAL_V = 100
+# SIMPLE_TEST_PWM = None   # back to closed loop
 ABORT_LOST_S = 1.5
 FREEZE_RADIUS = 20       # below this, direction noise dominates - don't trust it
 
 MAX_PWM = 1.0
 MIN_PWM = 0.00
 VEL_FILTER_ALPHA_INIT = 0.5   # 1 = no filtering, lower = smoother/laggier
-ALPHA_POS = 0.4               # separate from vel filter alpha, tune independently
+ALPHA_POS = 0.3               # separate from vel filter alpha, tune independently
 LINE_TIME_CONST = 1           # seconds - how long a persistent deflection takes to "move" the line
 
 VISUALIZE = True

@@ -11,6 +11,11 @@ SEG_COL   = (0, 165, 255)    # active approach line (orange)
 TRAIL_COL = (180, 0, 180)    # where the bot actually went (purple)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
+UM_PER_PX = 4.66
+def set_scale(upp):
+    global UM_PER_PX
+    UM_PER_PX = float(upp)
+
 
 def _pt(p):
     return int(round(p[0])), int(round(p[1]))
@@ -27,7 +32,8 @@ def _poly(pts):
  
 def draw_scene(frame, bot_pos, bot_r, goals=None, debug=None, contour=None):
     img = frame.copy()
-    cv2.line(img, (540, 430), (582, 430), BLACK, 3)
+    bar = int(round(200.0 / UM_PER_PX))
+    cv2.line(img, (540, 430), (540 + bar, 430), BLACK, 3)
     cv2.putText(img, '200 microns', (505, 455), FONT, 0.6, BLACK, 1)
     d = debug or {}
  
