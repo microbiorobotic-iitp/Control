@@ -42,10 +42,11 @@ LOST_TIMEOUT       = 0.3    # seconds without robot before motors are cut
 # MAX_EXCESS_PWM = 1.0      # cap on the v/k term in the calibrated drive
 # PWM_SLEW = 0.3            # max PWM increase per second (calibration ramp was much slower)
 
-# KP_V = 2e-3
-# KI_V = 3e-3
-# KD_V = 0
-# MAX_INTEGRAL_V = 100
+SPEED_RAMP_S = 5.0   # time to reach cruise speed
+KP_U = 0.05          # PWM per unit normalised speed error
+KI_U = 0.05          # PWM/s per unit normalised error  (0.05 -> ~10 s from 0 to 0.5 if speed is stuck at 0)
+PWM_SLEW = 0.3       # currently commented out in config but navigate.py uses it
+
 # SIMPLE_TEST_PWM = None   # back to closed loop
 ABORT_LOST_S = 1.5
 FREEZE_RADIUS = 20       # below this, direction noise dominates - don't trust it

@@ -58,7 +58,7 @@ class ActionController:
         self.s_f = None              # filtered position
         self.done = False
 
-    def step(self, s_meas_um, dt):
+    def step(self, s_meas_um, dt, u_max):
         p = self.p
         # 1) low-pass the measured position (tau ~0.1-0.2 s)
         a = dt / (p.get('pos_filter_tau_s', 0.15) + dt)
@@ -71,22 +71,22 @@ class ActionController:
             self.t_ref = min(self.t_ref + dt, self.ref.T)
         self.t_total += dt
 
-        # 2) PI on filtered error; integral clamped
-        lim = p['max_integral_um']
-        self.integral = float(np.clip(self.integral + e * dt, -lim, lim))
-        P, I = p['Kp_pos'] * e, p['Ki_pos'] * self.integral
-        v_cmd = v_ref + P + I
+        # 2) signed PWM = integrator of the normalised position error (+ small P)
+        en = e / p['max_lag_um']
+        P = p['Kp_u'] * en
+        pre = self.integral + p['Ki_u'] * en * dt
+        if abs(pre) <= u_max:                 # anti-windup
+            self.integral = pre
+        I = self.integral
+        v_cmd = v_ref                                # kept only so the return dict / logging still work
+        u_target = float(np.clip(I + P, -u_max, u_max))
 
-        # 3) signed target: drag term + spring-holding term, no dead zone, no abs()/sign split
-        u_target = v_cmd / p['G_um_s_per_pwm'] + p.get('k_hold_pwm_per_um', 0.0) * s_ref
-        u_target += p['phi_pwm'] * np.tanh(v_cmd / 20.0)     # smooth friction term (phi=0 now, harmless)
-
-        # 4) first-order smoothing, then SYMMETRIC slew limit
+        # 3) first-order smoothing, then SYMMETRIC slew limit
         b = dt / (p.get('pwm_tau_s', 0.2) + dt)
         u = self.prev_u + b * (u_target - self.prev_u)
         up, dn = p['pwm_slew_per_s'], p.get('pwm_slew_down_per_s', p['pwm_slew_per_s'])
         u = float(np.clip(u, self.prev_u - dn * dt, self.prev_u + up * dt))
-        # u = float(np.clip(u, -p['max_pwm'], p['max_pwm']))
+        u = float(np.clip(u, -u_max, u_max))
         self.prev_u = u
 
         finished = self.t_ref >= self.ref.T

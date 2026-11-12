@@ -3,49 +3,42 @@ from calib_model import restoring_drive
 import config as C
 
 class VelocityPID:
-    def __init__(self):
-        self.integral = 0.0
-        self.prev_error = None
-        self.filtered_speed = 0.0
-        self.in_decel = False
-        self.was_in_decel = False
+    """PWM is an integrator of the speed error (no plant gain G). Target speed also ramps up over time."""
+    def __init__(self, p, u0=0.0):
+        self.p = p
+        self.u = float(u0); self.filtered_speed = 0.0; self.in_decel = False; self.t = 0.0
 
-    def step(self, forward_speed, dist_to_waypoint, dist_final, dt, phi=0.0, G=None):
+    def step(self, forward_speed, dist_to_waypoint, dist_final, dt, u_max=1.0):
+        p = self.p
+        self.t += dt
         if not self.in_decel and dist_to_waypoint < C.DECEL_RADIUS:
             self.in_decel = True
-        elif self.in_decel and dist_to_waypoint > C.DECEL_RADIUS * 1.15:   # exit buffer
+        elif self.in_decel and dist_to_waypoint > C.DECEL_RADIUS * 1.15:
             self.in_decel = False
 
-        target_speed = C.CRUISE_SPEED
+        # speed reference: smooth ramp up, sqrt slow-down near the goal
+        target_speed = C.CRUISE_SPEED * min(1.0, self.t / p['speed_ramp_s'])
         alpha = C.VEL_FILTER_ALPHA_INIT
-        if dist_to_waypoint < C.DECEL_RADIUS:
-            alpha = 0.1   # near the target, trust the actual velocity less over the laggy estimate
-            target_speed = max(C.MIN_SPEED, C.CRUISE_SPEED * np.sqrt(dist_final / C.DECEL_RADIUS))
-
+        if self.in_decel:
+            alpha = 0.1
+            target_speed = min(target_speed,
+                               max(C.MIN_SPEED, C.CRUISE_SPEED * np.sqrt(dist_final / C.DECEL_RADIUS)))
         self.filtered_speed = alpha * forward_speed + (1 - alpha) * self.filtered_speed
 
         error_v = target_speed - self.filtered_speed
-        self.integral = max(min(self.integral + error_v * dt, C.MAX_INTEGRAL_V), -C.MAX_INTEGRAL_V)
-        deriv_v = 0.0 if self.prev_error is None else (error_v - self.prev_error) / dt
-        self.prev_error = error_v
+        e_n = error_v / C.CRUISE_SPEED                    # normalised error, unitless
+        P = p['Kp_u'] * e_n
+        pre = self.u + p['Ki_u'] * e_n * dt
+        if C.MIN_PWM <= pre <= u_max:
+            self.u = pre
+        self.u = float(np.clip(self.u, C.MIN_PWM, u_max))
+        magnitude = float(np.clip(self.u + P, C.MIN_PWM, u_max))
+        return dict(target_speed=target_speed, error_v=error_v, P=P, I=self.u, D=0.0, M=P,
+                    base=self.u, magnitude=magnitude, filtered_speed=self.filtered_speed)
 
-        if self.in_decel and not self.was_in_decel:   # transition edge
-            self.integral *= 0.3   # soften the carried-over windup
-        self.was_in_decel = self.in_decel
-
-        P = C.KP_V * error_v
-        I = C.KI_V * self.integral
-        D = C.KD_V * deriv_v
-        M = float(np.clip(P + I + D, -C.M_MAX, C.M_MAX))        # px/s, NOT PWM
-
-        G = G if (G is not None and G > 1e-6) else C.K_FALLBACK
-        base = phi + target_speed / G                            # friction + feedforward speed
-        drive = phi + (target_speed + M) / G                     # slide: (V_des + M)/G + phi
-        # magnitude = max(C.MIN_PWM, min(C.MAX_PWM, drive))
-        magnitude = max(C.MIN_PWM, drive)
-        return dict(target_speed=target_speed, error_v=error_v, P=P, I=I, D=D, M=M,
-                    base=base, magnitude=magnitude, filtered_speed=self.filtered_speed)
-
+def axis_limit(direction, cap=1.0):
+    m = max(abs(direction[0]), abs(direction[1]))
+    return cap / m if m > 1e-6 else cap
 
 def steering_direction(vector_to_target, last_good_dir):
     steer_dist = np.linalg.norm(vector_to_target)

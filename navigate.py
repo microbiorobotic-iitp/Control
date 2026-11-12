@@ -31,7 +31,7 @@ from action import ActionController
 from display import draw_scene, select_goals
 from hardware import Arduino, Camera, currents
 from path import advance_segment, carrot_point, segment_geometry
-from control import VelocityPID, steering_direction
+from control import VelocityPID, steering_direction, axis_limit
 from recording import DUTY_COLUMNS, Experiment, Recorder, duties_from_vector, duty_columns
 from storage import save_log
 from tracker_config import Cfg, Scale
@@ -121,10 +121,10 @@ def run_approach(cam, ard, exp, profile, scale, raw_goals, win, resume=False):
     seg_idx = 0
     prev_bot_pos = bot_pos.copy()
     last_good_dir = np.zeros(2)
-    pid = VelocityPID()
     log = {k: [] for k in LOG_KEYS}
     status = 'aborted'
     prev_mag = HOLD['magnitude'] if resume else 0.0
+    pid = VelocityPID(profile['approach'], u0=prev_mag) 
     trail = deque(maxlen=300)
     last_print = 0.0
 
@@ -154,7 +154,7 @@ def run_approach(cam, ard, exp, profile, scale, raw_goals, win, resume=False):
                     currents(ard, [0, 0], 0)
                     prev_mag = 0.0
                     HOLD['magnitude'] = 0.0
-                    pid = VelocityPID()              # drop the old integral state
+                    pid = VelocityPID(profile['approach'], u0=prev_mag)              # drop the old integral state
                 t_prev = time.perf_counter()         # avoid a huge dt when it comes back
                 prev_bot_pos = bot_pos.copy()
                 if C.VISUALIZE:
@@ -195,8 +195,10 @@ def run_approach(cam, ard, exp, profile, scale, raw_goals, win, resume=False):
                 forward_speed = np.dot(raw_velocity, u_seg)
 
                 direction, last_good_dir = steering_direction(vector_to_target, last_good_dir)
-                pid_out = pid.step(forward_speed, dist_to_waypoint, dist_final, dt, C.PHI, None)   # G = C.K_FALLBACK
-                magnitude = min(pid_out['magnitude'], C.MAX_PWM, prev_mag + C.PWM_SLEW * dt)      # ramp up, never jump
+                u_max = axis_limit(direction, C.MAX_PWM)
+                pid_out = pid.step(forward_speed, dist_to_waypoint, dist_final, dt, u_max)
+                slew = profile['approach']['pwm_slew_per_s']
+                magnitude = min(pid_out['magnitude'], u_max, prev_mag + slew * dt)
                 prev_mag = magnitude
                 currents(ard, direction, magnitude)
                 HOLD['direction'], HOLD['magnitude'] = np.array(direction, float), float(magnitude)
@@ -217,9 +219,9 @@ def run_approach(cam, ard, exp, profile, scale, raw_goals, win, resume=False):
 
                 row = base_row(res, 'approach', upp, trk_ms, loop_ms, 'approach')
                 row.update(target_speed_um_s=pid_out['target_speed'] * upp, speed_along_um_s=forward_speed * upp,
-                           filtered_speed_um_s=pid_out['filtered_speed'] * upp, error_v=pid_out['error_v'] * upp,
-                           P=pid_out['P'] * upp, I=pid_out['I'] * upp, D=pid_out['D'] * upp, M=pid_out['M'] * upp, base=pid_out['base'],
-                           pwm=magnitude, dir_x=direction[0], dir_y=direction[1],
+           filtered_speed_um_s=pid_out['filtered_speed'] * upp, error_v=pid_out['error_v'] * upp,
+           P=pid_out['P'], I=pid_out['I'], D=pid_out['D'], M=pid_out['M'], base=pid_out['base'],
+           pwm=magnitude, dir_x=direction[0], dir_y=direction[1],
                            cross_track_um=cross_track_error * upp, dist_goal_um=dist_final * upp, seg=seg_idx + 1)
                 row.update(duty_columns(duties_from_vector(direction, magnitude)))
                 rec.log(frame, t=t, **row)                          # RAW frame: nothing is drawn on it
@@ -310,6 +312,8 @@ def run_action(cam, ard, exp, profile, scale, win):
         return 'cancelled'
     u_coil = np.array([u_img[0], -u_img[1]])              # coil axes: y is up
 
+    u_max = p['max_pwm'] / max(abs(u_coil[0]), abs(u_coil[1]))
+
     # start point = average of a few detections (less noise than a single frame)
     pts, frame = [], None
     t0 = time.perf_counter()
@@ -359,7 +363,7 @@ def run_action(cam, ard, exp, profile, scale, win):
                 hud = ['ROBOT NOT FOUND - motors off, reference paused']
             else:
                 s_meas = float(np.dot(res['center'] - pos0, u_img)) * upp           # um along the pull direction
-                out = ctl.step(s_meas, dt)
+                out = ctl.step(s_meas, dt, u_max) 
                 direction = out['sign'] * u_coil
                 currents(ard, direction, out['pwm'])
 
@@ -379,7 +383,7 @@ def run_action(cam, ard, exp, profile, scale, win):
                           f"e={out['e']:6.1f} v={v_along:6.1f} um/s pwm={out['pwm']:.4f}")
                 hud = [f"ACTION {out['phase']}   t {ctl.t_ref:.1f}/{ctl.ref.T:.1f} s   [Q] stop (tracker keys locked)",
                        f"s_ref {out['s_ref']:.0f}  s {s_meas:.0f}  err {out['e']:+.1f} um   speed {v_along:.0f} (ref {out['v_ref']:.0f}) um/s",
-                       f"PWM {out['pwm']:.4f}  P {out['P']:+.1f} I {out['I']:+.1f} um/s   rec backlog {rec.backlog}"]
+                       f"PWM {out['pwm']:.4f}  P {out['P']:+.3f} I {out['I']:+.3f} (PWM)   rec backlog {rec.backlog}"]
                 if out['done']:
                     rec.event('action done')
                     status = 'done'
