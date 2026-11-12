@@ -2,7 +2,6 @@ import numpy as np
 from calib_model import restoring_drive
 import config as C
 
-
 class VelocityPID:
     def __init__(self):
         self.integral = 0.0
@@ -42,7 +41,8 @@ class VelocityPID:
         G = G if (G is not None and G > 1e-6) else C.K_FALLBACK
         base = phi + target_speed / G                            # friction + feedforward speed
         drive = phi + (target_speed + M) / G                     # slide: (V_des + M)/G + phi
-        magnitude = max(C.MIN_PWM, min(C.MAX_PWM, drive))
+        # magnitude = max(C.MIN_PWM, min(C.MAX_PWM, drive))
+        magnitude = max(C.MIN_PWM, drive)
         return dict(target_speed=target_speed, error_v=error_v, P=P, I=I, D=D, M=M,
                     base=base, magnitude=magnitude, filtered_speed=self.filtered_speed)
 

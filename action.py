@@ -54,33 +54,51 @@ class ActionController:
         self.t_ref = 0.0
         self.t_total = 0.0
         self.integral = 0.0
-        self.prev_pwm = 0.0
+        self.prev_u = 0.0            # signed, smoothed command (PWM units)
+        self.s_f = None              # filtered position
         self.done = False
 
     def step(self, s_meas_um, dt):
-        """s_meas_um: displacement from the start point along the pull direction (um). Returns a dict."""
         p = self.p
+        # 1) low-pass the measured position (tau ~0.1-0.2 s)
+        a = dt / (p.get('pos_filter_tau_s', 0.15) + dt)
+        self.s_f = s_meas_um if self.s_f is None else self.s_f + a * (s_meas_um - self.s_f)
+
         s_ref, v_ref, phase = self.ref.at(self.t_ref)
-        e = s_ref - s_meas_um
+        e = s_ref - self.s_f
         lagging = abs(e) > p['max_lag_um']
         if not lagging:
-            self.t_ref = min(self.t_ref + dt, self.ref.T)          # reference clock only runs while we keep up
+            self.t_ref = min(self.t_ref + dt, self.ref.T)
         self.t_total += dt
+
+        # 2) PI on filtered error; integral clamped
         lim = p['max_integral_um']
         self.integral = float(np.clip(self.integral + e * dt, -lim, lim))
         P, I = p['Kp_pos'] * e, p['Ki_pos'] * self.integral
         v_cmd = v_ref + P + I
-        sign = 1.0 if v_cmd >= 0 else -1.0
-        speed = abs(v_cmd)
-        pwm = 0.0 if speed < p['min_cmd_um_s'] else p['phi_pwm'] + speed / p['G_um_s_per_pwm']
-        pwm = min(max(pwm, 0.0), p['max_pwm'], self.prev_pwm + p['pwm_slew_per_s'] * dt)   # cap + ramp up, never jump
-        self.prev_pwm = pwm
+
+        # 3) signed target: drag term + spring-holding term, no dead zone, no abs()/sign split
+        u_target = v_cmd / p['G_um_s_per_pwm'] + p.get('k_hold_pwm_per_um', 0.0) * s_ref
+        u_target += p['phi_pwm'] * np.tanh(v_cmd / 20.0)     # smooth friction term (phi=0 now, harmless)
+
+        # 4) first-order smoothing, then SYMMETRIC slew limit
+        b = dt / (p.get('pwm_tau_s', 0.2) + dt)
+        u = self.prev_u + b * (u_target - self.prev_u)
+        up, dn = p['pwm_slew_per_s'], p.get('pwm_slew_down_per_s', p['pwm_slew_per_s'])
+        u = float(np.clip(u, self.prev_u - dn * dt, self.prev_u + up * dt))
+        # u = float(np.clip(u, -p['max_pwm'], p['max_pwm']))
+        self.prev_u = u
+
         finished = self.t_ref >= self.ref.T
         if finished and (abs(e) <= p['end_tol_um'] or self.t_total > self.ref.T + p['settle_timeout_s']):
             self.done = True
-        return dict(sign=sign, pwm=pwm, v_cmd=v_cmd, v_ref=v_ref, s_ref=s_ref, e=e, P=P, I=I,
-                    phase=phase if not lagging else phase + '(lag)', lagging=lagging, done=self.done)
+        return dict(sign=1.0 if u >= 0 else -1.0, pwm=abs(u), v_cmd=v_cmd, v_ref=v_ref, s_ref=s_ref,
+                    e=e, P=P, I=I, phase=phase + ('(lag)' if lagging else ''),
+                    lagging=lagging, done=self.done)
 
-    def hold(self):
-        """Call instead of step() while the robot is not seen: motors off, reference clock stays paused."""
-        self.prev_pwm = 0.0
+    def hold(self, dt=0.033):
+        """Robot not seen: decay the command gently instead of cutting it."""
+        dn = self.p.get('pwm_slew_down_per_s', self.p['pwm_slew_per_s'])
+        step = dn * dt
+        self.prev_u = float(np.sign(self.prev_u) * max(abs(self.prev_u) - step, 0.0))
+        return self.prev_u

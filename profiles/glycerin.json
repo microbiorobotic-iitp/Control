@@ -3,14 +3,14 @@
   "calib_file": "calibrations/glycerin_a.pkl",
   "tracker_max_speed_um_s": 1500,
   "approach": {
-    "G_um_s_per_pwm": 2000, "phi_pwm": 0.0085,
-    "cruise_um_s": 50, "min_speed_um_s": 10, "lookahead_um": 100, "decel_radius_um": 50, "roa_um": 50, "freeze_radius_um": 100,
-    "Kp": 0.00, "Ki": 0.000, "Kd": 0.0, "max_integral_um": 466, "m_max_um_s": 80
+    "G_um_s_per_pwm": 3000, "phi_pwm": 0.00,
+    "cruise_um_s": 40, "min_speed_um_s": 10, "lookahead_um": 100, "decel_radius_um": 50, "roa_um": 50, "freeze_radius_um": 100,
+    "Kp": 0.001, "Ki":0.0, "Kd": 0.0, "max_integral_um": 200, "m_max_um_s": 80
   },
   "action": {
     "G_um_s_per_pwm": 4194, "phi_pwm": 0.0,
-    "speed_um_s": 50, "distance_um": 500, "ramp_up_s": 3, "ramp_down_s": 3,
-    "retract": true, "retract_speed_um_s": 50,
-    "Kp_pos": 1.5, "Ki_pos": 0.6, "max_lag_um": 40, "max_pwm": 0.6
+    "speed_um_s": 150, "distance_um": 5000, "ramp_up_s": 0.1, "ramp_down_s": 0.1,
+    "retract": true, "retract_speed_um_s": 150,
+    "Kp_pos": 3.5, "Ki_pos": 4.0, "max_lag_um": 40, "max_pwm": 0.6
   }
 }

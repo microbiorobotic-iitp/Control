@@ -34,6 +34,12 @@ def currents(ard, dir_vec, magnitude):
     x_val = dir_vec[0] * magnitude
     y_val = dir_vec[1] * magnitude
 
+    peak = max(abs(x_val), abs(y_val))
+    if peak > C.MAX_PWM:
+        scale = C.MAX_PWM / peak
+        x_val *= scale
+        y_val *= scale
+
     if x_val >= 0:
         ard.write_dir('xplus', 0)
         ard.write_pwm('xplus', x_val)
